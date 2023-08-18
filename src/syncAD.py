@@ -22,7 +22,6 @@ conn.unbind()
 
 
 
-
 def addLDAP():
         ldap_server = 'localhost'
         ldap_port = 389
@@ -30,15 +29,13 @@ def addLDAP():
         admin_username = 'cn=admin,dc=alidap,dc=com'
         admin_password = '123456'
         
-        user_dn = 'cn=yasin+sn=yasin,dc=alidap,dc=com'
-        #user_attributes = {
-         #   'objectClass' : ['user','person','top','organizationalPerson'],
+        user_dn = 'cn=ali+sn=utku,dc=alidap,dc=com'
+        user_attributes = {
+            'objectClass' : ['person'],
+            'cn' :'Ali',
+            'sn' : 'Utku'
             
-          #  'objectClass' : 'organizationalPerson',
-           # 'cn' :'Yasin',
-            #'sn' : 'Elma',
-            
-            #}
+            }
         
         server = Server(ldap_server, port=ldap_port)
         conn = Connection(server, user=admin_username, password=admin_password)
@@ -46,11 +43,15 @@ def addLDAP():
         if not conn.bind():
             print(f" Failed to bind to LDAP server: {conn.result}")
         else:
-            result = conn.add(user_dn, ['person'], { 'cn':'yasin'})
+            result = conn.add(user_dn, attributes=user_attributes)
         if result:
             print("Users added successfully. ")
         else:
             print(f"Failed to add user: {conn.result}")
+
+
+
+
 
 class User:
     def __init__(self, username, email):
