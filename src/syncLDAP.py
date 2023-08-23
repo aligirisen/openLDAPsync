@@ -14,7 +14,7 @@ conn.search(base_dn,'(objectClass=person)')
 obj_person = ObjectDef('Person',conn)
 r = Reader(conn,obj_person, base_dn)
 r.search()
-print(r.entries[0].sn.value)
+print(r.entries[0].entry_to_ldif())
 #print(conn.entries[0].entry_to_ldif())
 
 
