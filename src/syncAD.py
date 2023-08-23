@@ -1,4 +1,4 @@
-from ldap3 import Server, Connection, ALL
+from ldap3 import *
 
 ad_server = 'win-l9up83kacsi.ornek.local'
 ad_port = 389
@@ -11,11 +11,32 @@ base_dn = 'cn=Users,dc=ornek,dc=local'
 server = Server(ad_server, port=ad_port, get_info=ALL)
 conn = Connection(server, user=ad_username, password=ad_password, auto_bind=True)
 
-search_filter = '(objectClass=user)'
+search_filter = '(&(objectClass=Person)(!(sAMAccountName=krbtgt))(!(sAMAccountName=Administrator))(!(sAMAccountName=Guest)) )'
+
+
 
 conn.search(base_dn, search_filter)
-for entry in conn.entries:
-    print(f"DN: {entry.entry_dn}")
+
+
+obj_inetorgperson = ObjectDef('Person',conn)
+r = Reader(conn, obj_inetorgperson, base_dn, search_filter)
+r.search()
+#entry = r.entries[0].entry_to_ldif()
+
+#print(r.entries[5].memberOf[1])
+
+
+for i in range(len(r.entries)):
+    if (r.entries[i].cn.value is not None):
+        print(r.entries[i].cn.value)
+        #conn.add()  add user
+        for j in range(len(r.entries[i].memberOf)):
+            print(r.entries[i].memberOf[j])
+            #conn.add() add group
+
+    else:
+        print("Null deger atlandi...")
+
 
 conn.unbind()
 
@@ -48,16 +69,4 @@ def addLDAP():
             print("Users added successfully. ")
         else:
             print(f"Failed to add user: {conn.result}")
-
-
-
-
-
-class User:
-    def __init__(self, username, email):
-        self.username = username
-        self.email = email
-        self.objectClass = ['top', 'person', 'inetOrgPerson']
-
-
-addLDAP()
+#addLDAP()
