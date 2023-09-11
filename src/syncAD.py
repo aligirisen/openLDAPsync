@@ -12,30 +12,40 @@ ad_password = '123456A.'
 base_dn = 'cn=Users,dc=ornek,dc=local'
 
 
-def addLDAP(user_cn, user_sn, object_class):
+class User: # active directory'de bos olan attribute'lar None olarak gelip, LDAP'a eklerken sorun cikartmasin diye empty string'e cevirildi
+    def __init__(self, name='', surname='',samaccountname='', phone_number='', mail=None, object_guid='', object_class=None):
+        self.name = name
+        self.surname = surname if surname !=[] else " "
+        self.phone_number = phone_number if phone_number !=[] else " "
+        self.mail = mail if mail != [] else " "
+        self.samaccountname = samaccountname
+        self.object_guid = object_guid
+        self.object_class = object_class
 
-        if 'user' in object_class:
-            object_class.remove('user')
+    def toString(self):
+       return f"cn={user_cn}+sn={user_sn},phoneNumber={phone_number},mail={mail},object_guid={object_guid},ou=Users,dc=alidap,dc=com"
 
-
-
-
+def addLDAP(user):# convert objectGUID to uid activedirectory to openldap
         
-        user_dn = "cn="+user_cn+"+sn="+user_sn+",ou=Users,dc=alidap,dc=com"    
+        if 'user' in user.object_class:
+            object_class.remove('user')
+            object_class.append('inetOrgPerson')
+        user_dn = f"cn={user.name}+sn={user.surname},ou=Users,dc=alidap,dc=com"
         new_attributes = {
-                'objectClass': object_class,
+                'objectClass': user.object_class,
                 'ou': 'Users',
-                'cn': user_cn,
-                'sn': user_sn
+                'cn': user.name,
+                'sn': user.surname,
+                'uid': user.samaccountname,
+                'entryUUID': user.object_guid,
+                'telephoneNumber': user.phone_number,
                 }
-
-
         server = Server(ldap_server, port=ldap_port)
         conn = Connection(server, user=ldap_admin_username, password=ldap_admin_password)
-
         if not conn.bind():
             print(f" Failed to bind to LDAP server: {conn.result}")
         else:
+            print(user.toString())
             result = conn.add(user_dn, attributes=new_attributes)
         if result:
             print("Users added successfully. ")
@@ -43,42 +53,28 @@ def addLDAP(user_cn, user_sn, object_class):
             print(f"Failed to add user: {conn.result}")
 
 
-
-
 server = Server(ad_server, port=ad_port, get_info=ALL)
 conn = Connection(server, user=ad_username, password=ad_password, auto_bind=True)
 
-search_filter = '(&(objectClass=Person)(!(sAMAccountName=krbtgt))(!(sAMAccountName=Administrator))(!(sAMAccountName=Guest)) )'
+search_filt = '(&(objectClass=Person)(!(sAMAccountName=krbtgt))(!(sAMAccountName=Administrator))(!(sAMAccountName=Guest)) )'
 
-
-conn.search(base_dn, search_filter)
-
-
-obj_inetorgperson = ObjectDef('Person',conn)
-r = Reader(conn, obj_inetorgperson, base_dn, search_filter)
-r.search()
-#entry1 = r[0].entry_to_ldif()
-#print(r.entries[5].memberOf[1])
-
-
+entry_generator = conn.extend.standard.paged_search(search_base = base_dn, search_filter = search_filt,search_scope=SUBTREE, attributes = ['cn', 'sn','sAMAccountName', 'telephoneNumber', 'mail','objectGUID','objectClass'])
 object_class = []
-for i in range(len(r.entries)):
-    if (r.entries[i].cn.value is not None):
-        object_class += r.entries[i].objectClass
-        user_cn = r.entries[i].cn.value.split()[0]
-        user_sn = r.entries[i].sn.value
-        addLDAP(user_cn, user_sn, object_class)
-        object_class = []
-        #conn.add()  add user
-        for j in range(len(r.entries[i].memberOf)):
-            print(r.entries[i].memberOf[j])
-            
-            
-            #conn.add() add group
 
+for entry in entry_generator:
+    if (entry['attributes']['cn'] is not None):
+        
+        object_class += entry['attributes']['objectClass']
+        user_cn = entry['attributes']['cn'].split()[0]# iki isimli olanlar konusunda bir sorun var ikinci ismi almıyor bu yöntem
+        user_sn = entry['attributes']['sn']
+        phone_number = entry['attributes']['telephoneNumber']
+        mail = entry['attributes']['mail']
+        object_guid = entry['attributes']['objectGUID']
+        samaccountname = entry['attributes']['sAMAccountName']
+        user = User(name=user_cn, surname=user_sn, samaccountname = samaccountname, phone_number=phone_number, mail=mail, object_guid = object_guid, object_class=object_class)
+        addLDAP(user)
+        object_class = []
     else:
         print("Isimsiz obje atlandi...")
 
-
-conn.unbind()
-
+conn.unbind()        

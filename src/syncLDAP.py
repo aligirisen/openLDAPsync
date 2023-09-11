@@ -9,13 +9,17 @@ base_dn = 'ou=Users,dc=alidap,dc=com'
 
 server = Server(ad_server, port=ad_port, get_info=ALL)
 conn = Connection(server, user=ad_username, password=ad_password, auto_bind=True)
-conn.search(base_dn,'(objectClass=person)')
 
-obj_person = ObjectDef('Person',conn)
-r = Reader(conn,obj_person, base_dn)
-r.search()
-print(r.entries[0].entry_to_ldif())
-#print(conn.entries[0].entry_to_ldif())
+
+#search_filt = '(&(objectClass=Person)(!(sAMAccountName=krbtgt))(!(sAMAccountName=Administrator))(!(sAMAccountName=Guest)) )'
+search_filt = '(objectClass=Person)'
+
+entry_generator = conn.extend.standard.paged_search(search_base = base_dn, search_filter = search_filt,search_scope=SUBTREE, attributes = ['cn', 'sn', 'telephoneNumber','entryUUID', 'mail','objectClass','uidnumber'])
+
+
+
+for entry in entry_generator:
+    print(entry['attributes']['cn'],entry['attributes']['entryUUID'])
 
 
 conn.unbind()
