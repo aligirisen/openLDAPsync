@@ -14,12 +14,12 @@ conn = Connection(server, user=ad_username, password=ad_password, auto_bind=True
 #search_filt = '(&(objectClass=Person)(!(sAMAccountName=krbtgt))(!(sAMAccountName=Administrator))(!(sAMAccountName=Guest)) )'
 search_filt = '(objectClass=Person)'
 
-entry_generator = conn.extend.standard.paged_search(search_base = base_dn, search_filter = search_filt,search_scope=SUBTREE, attributes = ['cn', 'sn', 'telephoneNumber','entryUUID', 'mail','objectClass','uidnumber'])
+entry_generator = conn.extend.standard.paged_search(search_base = base_dn, search_filter = search_filt,search_scope=SUBTREE, attributes = ['cn', 'sn', 'telephoneNumber','entryUUID', 'mail','objectClass','uidnumber','description'])
 
 
 
 for entry in entry_generator:
-    print(entry['attributes']['cn'],entry['attributes']['entryUUID'])
+    print(entry['attributes']['description'])
 
 
 conn.unbind()

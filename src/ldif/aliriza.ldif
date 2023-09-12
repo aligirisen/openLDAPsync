@@ -1,0 +1,14 @@
+
+dn: cn=Ali Riza+sn=Girisen,ou=Users,dc=alidap,dc=com
+changetype: add
+objectClass: top
+objectClass: person
+objectClass: organizationalPerson
+objectClass: inetOrgPerson
+ou: Users
+uid: aliriza
+cn: Ali Riza
+sn: Girisen
+mail:  
+telephoneNumber: 05532034467
+description: {5ae7b8b9-8f59-4e01-ab9b-7ed0b7549f45}

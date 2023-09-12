@@ -16,23 +16,33 @@ base_dn = 'cn=Users,dc=ornek,dc=local'
 
 script_directory = os.path.dirname(os.path.abspath(__file__))
 
-ldif_files = [file for file in os.listdir(script_directory) if file.endswith(".ldif")]
+ldif_directory = os.path.join(script_directory, "ldif")
+
+# Create the ldif_contents directory if it doesn't exist
+if not os.path.exists(ldif_directory):
+    print("Directory is not existing")
 
 
 
+ldif_files = [file for file in os.listdir(ldif_directory) if file.endswith(".ldif")]
+os.chdir("ldif")
+
+print(ldif_files)
 # Loop through LDIF files and execute ldapmodify
 for ldif_file in ldif_files:
     command = [
         "ldapmodify",
+        "-a",
         "-x",
         "-D", ldap_admin_username,
-        "-W", ldap_admin_password,
+        "-w", ldap_admin_password,
         "-H", ldap_server,
         "-f", ldif_file
     ]
 
     try:
         # Execute the ldapmodify command
+        print(command)
         subprocess.run(command, check=True)
         print(f"Successfully executed {ldif_file}")
     except subprocess.CalledProcessError as e:

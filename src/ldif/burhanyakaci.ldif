@@ -1,0 +1,14 @@
+
+dn: cn=Burhan R. Yakaci+sn=Yakaci,ou=Users,dc=alidap,dc=com
+changetype: add
+objectClass: top
+objectClass: person
+objectClass: organizationalPerson
+objectClass: inetOrgPerson
+ou: Users
+uid: burhanyakaci
+cn: Burhan R. Yakaci
+sn: Yakaci
+mail:  
+telephoneNumber:  
+description: {1c8ff4b4-ea4a-4462-bf76-4b91b9b86032}

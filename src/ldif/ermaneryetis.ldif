@@ -1,0 +1,14 @@
+
+dn: cn=Erman Eryetis+sn=Eryetis,ou=Users,dc=alidap,dc=com
+changetype: add
+objectClass: top
+objectClass: person
+objectClass: organizationalPerson
+objectClass: inetOrgPerson
+ou: Users
+uid: ermaneryetis
+cn: Erman Eryetis
+sn: Eryetis
+mail:  
+telephoneNumber:  
+description: {de04c9b8-7ecb-4a05-a663-5ba981ad19a4}
