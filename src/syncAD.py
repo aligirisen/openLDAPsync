@@ -64,6 +64,13 @@ def addLDAP(user):# convert objectGUID to uid activedirectory to openldap
     else:
         print(f"Failed to add user: {conn.result}")
     conn.unbind()
+    createLDIF(user)
+
+
+def createLDIF(user):
+
+    user_dn = f"cn={user.name}+sn={user.surname},ou=Users,dc=alidap,dc=com"
+
     ldif_content = f"""
 dn: {user_dn}
 changetype: add
@@ -78,7 +85,6 @@ sn: {user.surname}
 mail: {user.mail}
 telephoneNumber: {user.phone_number}
 """ 
-
 
     ldif_filename = f"{user.samaccountname}.ldif"
     ldif_directory = "ldif"
@@ -122,9 +128,11 @@ def updateLDAP(user_attributes, user_ldap, user):
                             pass
                         else:
                             modification_dict[key] = [(MODIFY_REPLACE, user_ldap[key])]
+                            createLDIF(user)
                 elif value == []:
                     if user_ldap[key] != []:
                         modification_dict[key] = [(MODIFY_REPLACE, user_ldap[key])]
+                        createLDIF(user)
         if modification_dict:
             try:
                 conn.modify(user_dn, modification_dict)
