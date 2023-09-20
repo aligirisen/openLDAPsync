@@ -1,4 +1,5 @@
 from ldap3 import *
+import re
 ad_server = 'localhost'
 ad_port = 389
 
@@ -11,15 +12,16 @@ server = Server(ad_server, port=ad_port, get_info=ALL)
 conn = Connection(server, user=ad_username, password=ad_password, auto_bind=True)
 
 
-#search_filt = '(&(objectClass=Person)(!(sAMAccountName=krbtgt))(!(sAMAccountName=Administrator))(!(sAMAccountName=Guest)) )'
+
 search_filt = '(objectClass=Person)'
 
-entry_generator = conn.extend.standard.paged_search(search_base = base_dn, search_filter = search_filt,search_scope=SUBTREE, attributes = ['cn', 'sn', 'telephoneNumber','entryUUID', 'mail','objectClass','uidnumber','description'])
+entry_generator = conn.extend.standard.paged_search(search_base = base_dn, search_filter = search_filt,search_scope=SUBTREE, attributes = ['cn', 'sn', 'telephoneNumber', 'mail','objectClass'])
 
 
 
 for entry in entry_generator:
-    print(entry['attributes']['description'])
+    print(entry['attributes'])
+    break
 
 
 conn.unbind()

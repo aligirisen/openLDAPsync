@@ -30,7 +30,7 @@ entry_generator_ldap = conn_ldap.extend.standard.paged_search(search_base = ldap
 
 
 
-class User:
+class User: # active directory'de bos olan attribute'lar None olarak gelip, LDAP'a eklerken sorun cikartmasin diye empty string'e cevirildi
     def __init__(self, name='', surname='',samaccountname='', phone_number='', mail=None, object_class=None):
         self.name = name
         self.surname = surname if surname !=[] else " "
@@ -60,7 +60,7 @@ def addLDAP(user):# convert objectGUID to uid activedirectory to openldap
     else:
         result = conn.add(user_dn, attributes=new_attributes)
     if result:
-        print(f"{user_dn.split()[0]} added successfully. ")
+        print("Users added successfully. ")
     else:
         print(f"Failed to add user: {conn.result}")
     conn.unbind()
@@ -79,6 +79,7 @@ mail: {user.mail}
 telephoneNumber: {user.phone_number}
 """ 
 
+# description's type is string so we need it. Otherwise you can create and use CustomAttribute. But you cannot use entryUUID. cuz it is forbidden (default slapd schemas configurations)
 
     ldif_filename = f"{user.samaccountname}.ldif"
     ldif_directory = "ldif"
@@ -104,43 +105,40 @@ def getLDAPAttributes(original_dn):
 
 def updateLDAP(user_attributes, user_ldap, user):
     user_dn = f"cn={user.name}+sn={user.surname},ou=Users,dc=alidap,dc=com"
-    #print("old one: ",user_attributes['mail'])
-    #print("new one: ",user_ldap['mail'])
+    #print("old one: ",user_attributes)
+    #print("new one: ",user_ldap)
 
     server = Server(ldap_server, port=ldap_port)
     conn = Connection(server, user=ldap_admin_username, password=ldap_admin_password)
- 
     if conn.bind():
         modification_dict = {}
+
         for key, value in user_attributes.items():
-            if key in user_ldap and key != "objectClass" and key != "uid": 
-                if value:
-                    if value[0] != user_ldap[key]:
-                        if key == "sn":
+            if key in user_ldap and key != "objectClass" and key != "uid":
+                if isinstance(value,list) and value:
+                    print(key)
+                    if value[0] != user_ldap[key] and value[0] is not None:
+                        if key == "cn" or key == "sn":
                             addLDAP(user)
-                        elif value == [' '] and user_ldap[key] == []:
-                            pass
                         else:
                             modification_dict[key] = [(MODIFY_REPLACE, user_ldap[key])]
-                elif value == []:
-                    if user_ldap[key] != []:
-                        modification_dict[key] = [(MODIFY_REPLACE, user_ldap[key])]
+
         if modification_dict:
             try:
                 conn.modify(user_dn, modification_dict)
-                print(f"Successfully modified the LDAP entry: {user_dn.split()[0]}")
+                print(f"Successfully modified the LDAP entry: {user_dn}")
             except Exception as e:
                 print(f"Failed to modify the LDAP entry: {e}")
         else:
-            print("No modifications to perform. for",user_attributes['cn'][0])
+            print("No modifications to perform. for",user_dn.split()[0])
 
         conn.unbind()
     else:
         print(f"Failed to bind to the LDAP server: {conn.result}")
 
 
+
 def normalize_ldap_dn(ad_dn, ldap_dn): # DN equalizer
-    
     original_ldap_dn = ldap_dn
     original_ad_dn = ad_dn
 
@@ -180,13 +178,12 @@ def normalize_ldap_dn(ad_dn, ldap_dn): # DN equalizer
     else:
         return False
 
+
 object_class = []
 uuid_list = []
-ldap_dn_list = []
 ldap_dn_list = getLDAPdns()
 
 for entry in entry_generator_ad:
-
         
     object_class += entry['attributes']['objectClass']
     user_cn = entry['attributes']['cn']
@@ -200,15 +197,17 @@ for entry in entry_generator_ad:
     new_attributes = entry['attributes']
     flag = False
 
-    if ldap_dn_list:
+
+    if ldap_dn_list is not None:
         for ldap_dn in ldap_dn_list:
-            existing_dn= normalize_ldap_dn(entry['dn'],ldap_dn)
-            if existing_dn  == ldap_dn:
+            if normalize_ldap_dn(entry['dn'], ldap_dn) == ldap_dn:
                 old_attributes = getLDAPAttributes(ldap_dn)
                 updateLDAP(old_attributes, new_attributes,user)
                 flag = True
     if not flag:
         addLDAP(user)
+        ldap_dn_list = getLDAPdns()
+
 
     object_class = []
 conn_ad.unbind()

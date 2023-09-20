@@ -1,13 +1,13 @@
 
-dn: cn=Erman Eryetis+sn=Eryetis,ou=Users,dc=alidap,dc=com
+dn: cn=Osman Gultekin+sn=Gultekin,ou=Users,dc=alidap,dc=com
 changetype: add
 objectClass: top
 objectClass: person
 objectClass: organizationalPerson
 objectClass: inetOrgPerson
 ou: Users
-uid: ermaneryetis
-cn: Erman Eryetis
-sn: Eryetis
+uid: osmangultekin
+cn: Osman Gultekin
+sn: Gultekin
 mail:  
 telephoneNumber:  

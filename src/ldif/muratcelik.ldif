@@ -1,13 +1,13 @@
 
-dn: cn=Erman Eryetis+sn=Eryetis,ou=Users,dc=alidap,dc=com
+dn: cn=Murat Celik+sn=Celik,ou=Users,dc=alidap,dc=com
 changetype: add
 objectClass: top
 objectClass: person
 objectClass: organizationalPerson
 objectClass: inetOrgPerson
 ou: Users
-uid: ermaneryetis
-cn: Erman Eryetis
-sn: Eryetis
-mail:  
+uid: muratcelik
+cn: Murat Celik
+sn: Celik
+mail: 526126516541
 telephoneNumber:  

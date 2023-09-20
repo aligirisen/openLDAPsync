@@ -1,0 +1,13 @@
+
+dn: cn=Oktay Emre+sn=Emre,ou=Users,dc=alidap,dc=com
+changetype: add
+objectClass: top
+objectClass: person
+objectClass: organizationalPerson
+objectClass: inetOrgPerson
+ou: Users
+uid: oktayemre
+cn: Oktay Emre
+sn: Emre
+mail: dfgjnfd@gmail.com
+telephoneNumber: 5532060185
