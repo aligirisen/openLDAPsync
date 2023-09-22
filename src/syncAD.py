@@ -1,5 +1,5 @@
 from ldap3 import *
-import os, re, ldif
+import os, re
 from io import StringIO
 
 
@@ -13,7 +13,7 @@ base_dn = 'cn=Users,dc=ornek,dc=local'
 server_ad = Server(ad_server, port=ad_port, get_info=ALL)
 conn_ad = Connection(server_ad, user=ad_username, password=ad_password, auto_bind=True)
 search_filter_ad = '(&(objectClass=Person)(!(sAMAccountName=krbtgt))(!(sAMAccountName=Administrator))(!(sAMAccountName=Guest)) )'
-entry_generator_ad = conn_ad.extend.standard.paged_search(search_base = base_dn, search_filter = search_filter_ad,search_scope=SUBTREE, attributes = ['cn', 'sn','sAMAccountName', 'telephoneNumber', 'mail','objectClass'])
+entry_generator_ad = conn_ad.extend.standard.paged_search(search_base = base_dn, search_filter = search_filter_ad,search_scope=SUBTREE, attributes = ['cn', 'sn','sAMAccountName','telephoneNumber', 'mail','objectClass'])
 
 
 #OPENLDAP CONNECTION BLOCK
@@ -69,7 +69,7 @@ def addLDAP(user):# convert objectGUID to uid activedirectory to openldap
 
 def createLDIF(user):
 
-    user_dn = f"cn={user.name}+sn={user.surname},ou=Users,dc=alidap,dc=com"
+    user_dn = f"cn={user.name}+sn={user.surname},{ldap_base_dn}"
 
     ldif_content = f"""
 dn: {user_dn}
@@ -87,7 +87,7 @@ telephoneNumber: {user.phone_number}
 """ 
 
     ldif_filename = f"{user.samaccountname}.ldif"
-    ldif_directory = "ldif"
+    ldif_directory = "ldif_users"
     if not os.path.exists(ldif_directory):
         os.makedirs(ldif_directory)
     ldif_path = os.path.join(ldif_directory, ldif_filename)
@@ -109,7 +109,7 @@ def getLDAPAttributes(original_dn):
 
 
 def updateLDAP(user_attributes, user_ldap, user):
-    user_dn = f"cn={user.name}+sn={user.surname},ou=Users,dc=alidap,dc=com"
+    user_dn = f"cn={user.name}+sn={user.surname},{ldap_base_dn}"
     #print("old one: ",user_attributes['mail'])
     #print("new one: ",user_ldap['mail'])
 
