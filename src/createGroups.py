@@ -20,7 +20,7 @@ conn_ldap = Connection(server_ldap, user=ldap_admin_username, password=ldap_admi
 search_filter_ldap = '(objectClass=Person)'
 
 
-def createAdmins():
+'''def createAdministrators():
 
     try:
         server = Server(ldap_server)
@@ -41,21 +41,56 @@ def createAdmins():
             print('Failed to bind to the LDAP server.')
 
     except Exception as e:
-        print(f'An error occurred: {str(e)}')
+        print(f'An error occurred: {str(e)}')'''
+
+def createAdministrators():
+    group_dn = 'cn=Administrators,ou=Groups,dc=alidap,dc=com'
+    group_attributes = {
+            'objectClass': ['top', 'groupOfNames'],
+            'cn': 'Administrators',
+            'member': [
+                'cn=Administrator,ou=Users,ou=Groups,dc=alidap,dc=com'
+                ]
+    }
+    try:
+        with Connection(Server(ldap_server), user=ldap_admin_username, password=ldap_admin_password, auto_bind=True) as conn:
+            if not conn.search('cn=Administrators,ou=Groups,dc=alidap,dc=com', '(objectClass=*)'):
+                conn.add(group_dn, attributes = group_attributes)
+                print(f"Group {group_dn} added sucesfully.")
+            else:
+                print('Entry "cn=Administrators,ou=Groups,dc=alidap,dc=com" already exists.')
+
+    except LDAPExceptionError as e:
+        print(f"Error adding group: {e}")
+
+def create_DnsAdmins():
+    group_dn = 'cn=DnsAdmins,ou=Groups,dc=alidap,dc=com'
+    group_attributes = {
+            'objectClass': ['top', 'groupOfNames'],
+            'cn': 'DnsAdmins',
+            'member': [
+                'cn=DnsAdmin,ou=Users,ou=Groups,dc=alidap,dc=com'
+                ]
+    }
+    try:
+        with Connection(Server(ldap_server), user=ldap_admin_username, password=ldap_admin_password, auto_bind=True) as conn:
+            if not conn.search('cn=DnsAdmins,ou=Groups,dc=alidap,dc=com', '(objectClass=*)'):
+                conn.add(group_dn, attributes = group_attributes)
+                print(f"Group {group_dn} added sucesfully.")
+            else:
+                print('Entry "cn=DnsAdmins,ou=Groups,dc=alidap,dc=com" already exists.')
+
+    except LDAPExceptionError as e:
+        print(f"Error adding group: {e}")
 
 
 
 def create_groups_entry():
     try:
-        # Create an LDAP connection
         server = Server(ldap_server)
         conn = Connection(server, user=ldap_admin_username, password=ldap_admin_password)
-
-        # Bind to the LDAP server
         if conn.bind():
-            # Check if the Groups OU entry already exists
             if not conn.search('ou=Groups,dc=alidap,dc=com', '(objectClass=*)'):
-                # Groups OU entry does not exist, create it
                 groups_attributes = {
                     'objectClass': ['top', 'organizationalUnit'],
                 }
@@ -64,7 +99,6 @@ def create_groups_entry():
             else:
                 print('Groups OU entry "ou=Groups,dc=alidap,dc=com" already exists.')
 
-            # Unbind from the LDAP server
             conn.unbind()
         else:
             print('Failed to bind to the LDAP server.')
@@ -74,22 +108,17 @@ def create_groups_entry():
 
 def create_users_entry():
     try:
-        # Create an LDAP connection
         server = Server(ldap_server)
         conn = Connection(server, user=ldap_admin_username, password=ldap_admin_password)
-
-        # Bind to the LDAP server
         if conn.bind():
-            # Check if the Users OU entry already exists
-            if not conn.search('ou=Users,dc=alidap,dc=com', '(objectClass=*)'):
-                # Users OU entry does not exist, create it
+            if not conn.search('ou=Users,ou=Groups,dc=alidap,dc=com', '(objectClass=*)'):
                 users_attributes = {
                     'objectClass': ['top', 'organizationalUnit'],
                 }
-                conn.add('ou=Users,dc=alidap,dc=com', attributes=users_attributes)
-                print('Users OU entry "ou=Users,dc=alidap,dc=com" created successfully.')
+                conn.add('ou=Users,ou=Groups,dc=alidap,dc=com', attributes=users_attributes)
+                print('Users OU entry "ou=Users,ou=Groups,dc=alidap,dc=com" created successfully.')
             else:
-                print('Users OU entry "ou=Users,dc=alidap,dc=com" already exists.')
+                print('Users OU entry "ou=Users,ou=Groups,dc=alidap,dc=com" already exists.')
 
             # Unbind from the LDAP server
             conn.unbind()
@@ -119,8 +148,8 @@ olcAccess: {{0}}to *
     with open(ldif_path, "w") as ldif_file:
         ldif_file.write(ldif_content)
 
-
-createAdmins()
 createAclLDIF()
 create_groups_entry()
 create_users_entry()
+createAdministrators()
+create_DnsAdmins()

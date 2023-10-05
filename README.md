@@ -10,8 +10,8 @@ firstly check the connection and please be ensured about your active directory u
 
 ### Take a glance at tree.
 ```
-								---> ou=Administrators
----> DIT ---> ROOT DSE ---> dc=your-domain,dc=com --> ou=Groups
+								---> cn=Administrators
+---> DIT ---> ROOT DSE ---> dc=your-domain,dc=com --> ou=Groups ---> cn=DnsAdmins
 								---> ou=Users
 ```
 ### Execute the following script
@@ -29,7 +29,7 @@ sudo ldapmodify -H ldapi:/// -Y EXTERNAL -f Administrator_access.ldif
 ## Migration of Users
 
 
-### must have users in cn=Users group active directory side. It doesn't cover Administrator, krbtgt, guest or another default users.
+#### must have users in cn=Users group active directory side. It doesn't cover Administrator, krbtgt, guest or another default users.
 
 ### Execute following script
 
