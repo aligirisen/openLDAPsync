@@ -20,7 +20,7 @@ conn_ldap = Connection(server_ldap, user=ldap_admin_username, password=ldap_admi
 search_filter_ldap = '(objectClass=Person)'
 
 
-def createOuAdministrators():
+'''def createAdministrators():
 
     try:
         server = Server(ldap_server)
@@ -41,7 +41,7 @@ def createOuAdministrators():
             print('Failed to bind to the LDAP server.')
 
     except Exception as e:
-        print(f'An error occurred: {str(e)}')
+        print(f'An error occurred: {str(e)}')'''
 
 def createAdministrators():
     group_dn = 'cn=Administrators,ou=Groups,dc=alidap,dc=com'
@@ -152,5 +152,4 @@ createAclLDIF()
 create_groups_entry()
 create_users_entry()
 createAdministrators()
-createOuAdministrators()
 create_DnsAdmins()

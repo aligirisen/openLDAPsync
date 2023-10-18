@@ -36,7 +36,3 @@ sudo ldapmodify -H ldapi:/// -Y EXTERNAL -f Administrator_access.ldif
 ```
 python3 syncAD.py
 ```
-
-
-
-openLDAP should support UTF-8 for email addresses.
