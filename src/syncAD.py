@@ -1,334 +1,248 @@
+import subprocess, time, configparser, sys
 from ldap3 import *
-import os, re
-from io import StringIO
+
+config = configparser.ConfigParser()
+config.read('config.ini')
+
+argc = len(sys.argv)
 
 
 #ACTIVE DIRECTORY CONNECTION BLOCK
-ad_server = 'win-l9up83kacsi.ornek.local'
-ad_port = 389
-ad_username = 'cn=Administrator,cn=Users,dc=ornek,dc=local'
-ad_password = '123456A.'
-base_dn = 'cn=Users,dc=ornek,dc=local'
-
-server_ad = Server(ad_server, port=ad_port, get_info=ALL)
-conn_ad = Connection(server_ad, user=ad_username, password=ad_password, auto_bind=True)
-search_filter_ad = '(&(objectClass=Person)(!(sAMAccountName=krbtgt))(!(sAMAccountName=Administrator))(!(sAMAccountName=Guest)) )'
-entry_generator_ad = conn_ad.extend.standard.paged_search(search_base = base_dn, search_filter = search_filter_ad,search_scope=SUBTREE, attributes = ['cn', 'sn','sAMAccountName','telephoneNumber', 'mail','objectClass','givenName','memberOf',])
-
+ad_server = config.get('AD','ad_server')
+ad_port = int(config.get('AD','ad_port'))
+ad_username = config.get('AD','ad_username')
+ad_password = config.get('AD', 'ad_password')
+base_dn = config.get('AD','base_dn')
+auto_bind = bool(config.get('PREF', 'auto_bind'))
 
 #OPENLDAP CONNECTION BLOCK
-ldap_server = 'localhost'
-ldap_port = 389
-ldap_admin_username = 'cn=admin,dc=alidap,dc=com'
-ldap_admin_password = '123456'
-ldap_base_dn = 'ou=Users,ou=Groups,dc=alidap,dc=com'
-
-server_ldap = Server(ldap_server, port=ldap_port)
-conn_ldap = Connection(server_ldap, user=ldap_admin_username, password=ldap_admin_password, auto_bind=True)
-search_filter_ldap = '(objectClass=Person)'
-entry_generator_ldap = conn_ldap.extend.standard.paged_search(search_base = ldap_base_dn, search_filter = search_filter_ldap,search_scope=SUBTREE, attributes = ['cn', 'sn', 'telephoneNumber','mail','objectClass','uid'])
+ldap_server = config.get('LDAP','ldap_server')
+ldap_port = int(config.get('LDAP','ldap_port'))
+ldap_admin_username = config.get('LDAP','ldap_admin_username')
+ldap_admin_password = config.get('LDAP','ldap_admin_password')
+ldap_base_dn = config.get('LDAP','ldap_base_dn')
+ldap_group_dn = config.get('LDAP','ldap_group_dn')
 
 
+ldap_existing_groups = []
+spec_search = False
+input_dn = ""
 
-class User:
-    def __init__(self, name='', surname='',samaccountname='', phone_number='', mail=None, object_class=None):
-        self.name = name
-        self.surname = surname if surname !=[] else " "
-        self.phone_number = phone_number if phone_number !=[] else " "
-        self.mail = mail if mail != [] else " "
-        self.samaccountname = samaccountname
-        self.object_class = object_class
 
-    def toString(self):
-       return f"cn={user_cn}+sn={user_sn},ou=Groups,dc=alidap,dc=com"
-
-def addLDAP(user):
-    user_dn = f"cn={user.name}+sn={user.surname},{ldap_base_dn}"
-    new_attributes = {
-            'objectClass': user.object_class,
-            'ou': 'Groups',
-            'ou': 'Users',
-            'cn': user.name,
-            'sn': user.surname,
-            'uid': user.samaccountname,
-            'mail': user.mail,
-            'telephoneNumber': user.phone_number,
-            }
+def search_lines(filename_ad, total_lines_ad, input_dn):
+    user_counter = 0
+    global spec_search
     server = Server(ldap_server, port=ldap_port)
-    conn = Connection(server, user=ldap_admin_username, password=ldap_admin_password)
-    if not conn.bind():
-        print(f" Failed to bind to LDAP server: {conn.result}")
-    else:
-        result = conn.add(user_dn, attributes=new_attributes)
-    if result:
-        print(f"{user_dn.split()[0]} added successfully. ")
-    else:
-        print(f"Failed to add user: {conn.result}")
-    conn.unbind()
+    conn = Connection(server, user=ldap_admin_username, password=ldap_admin_password, auto_bind=True)
+    dn,cn,sn,email,phoneNumber,sAMAccountName,memberOf = " ", " ", " ", " ", " ", " ", []
+    with open(filename_ad, 'r') as file:
+        for line_number, line in enumerate(file, start=1):
+            if line.startswith('#') or line.startswith(' '):
+                if dn != " " and sAMAccountName != " " and cn != " ":
+                    if input_dn and spec_search:
+                        search_result = conn.search(dn, '(objectClass=person)')
+                        if search_result:
+                            modification_dict = {}
+                            attributes_to_compare = {
+                            'givenName': givenName,
+                            'sn': sn,
+                            'telephoneNumber': phoneNumber,
+                            'mail': mail,
+                            }
+                            for attribute_name, expected_value in attributes_to_compare.items():
+                                comparison = conn.compare(dn, attribute_name, expected_value)
+                                if comparison is False:
+                                    modification_dict[attribute_name] = [(MODIFY_REPLACE, expected_value)]
+                                else:
+                                    pass        
+                            if modification_dict:
+                                try:
+                                    conn.modify(dn, modification_dict)
+                                    print(f"Successfully modified the LDAP entry: {cn}")
+                                except Exception as e:
+                                    print(f"Failed to modify the LDAP entry: {e}")
+                            else:
+                                print("No attribute modifications to perform for ",cn)
+                            
+                            for group in memberOf:
+                                group_dn = f"cn={group},{ldap_group_dn}"
+                                result = conn.modify(group_dn, {'member': [(MODIFY_ADD, [dn])]})
+                                print(f"Successfully modified membership of the LDAP entry: {cn}")
+                            search_filter_groups = f"(&(objectClass=groupOfNames)(member={dn}))"
+                            user_membership = conn.search(ldap_group_dn, search_filter=search_filter_groups)
+                            if user_membership:
+                                for group in ldap_existing_groups:
+                                    group_dn = f"cn={group},{ldap_group_dn}"
+                                    group_existing = conn.compare(group_dn, "member", dn)
+                                    if group_existing:
+                                        if group not in memberOf:
+                                            print(f"Successfully modified membership of the LDAP entry: {cn}")
+                                            group_changes = {
+                                                    'member': [(MODIFY_DELETE, [dn])]
+                                                    }
+                                            result = conn.modify(group_dn, changes=group_changes)
+                                        else:
+                                            pass
+                        break
+                    elif not input_dn:
+                        search_result = conn.search(dn, '(objectClass=person)')
+                        if search_result:
+                            modification_dict = {}
+                            attributes_to_compare = {
+                            'givenName': givenName,
+                            'sn': sn,
+                            'telephoneNumber': phoneNumber,
+                            'mail': mail,
+                            }
+                            for attribute_name, expected_value in attributes_to_compare.items():
+                                comparison = conn.compare(dn, attribute_name, expected_value)
+                                if comparison is False:
+                                    modification_dict[attribute_name] = [(MODIFY_REPLACE, expected_value)]
+                                else:
+                                    pass        
+                            if modification_dict:
+                                try:
+                                    conn.modify(dn, modification_dict)
 
+                                except Exception as e:
+                                    print(f"Failed to modify the LDAP entry: {e}")
+                            else:
+                                pass
 
-def createLDIF(user):
+                        
+                            for group in memberOf:
+                                group_dn = f"cn={group},{ldap_group_dn}"
+                                result = conn.modify(group_dn, {'member': [(MODIFY_ADD, [dn])]})
 
-    user_dn = f"cn={user.name}+sn={user.surname},{ldap_base_dn}"
-
-    ldif_content = f"""
-dn: {user_dn}
-changetype: add
-objectClass: {user.object_class[0]}
-objectClass: {user.object_class[1]}
-objectClass: {user.object_class[2]}
-objectClass: {user.object_class[3]}
-ou: Groups
-ou: Users
-uid: {user.samaccountname}
-cn: {user.name}
-sn: {user.surname}
-mail: {user.mail}
-telephoneNumber: {user.phone_number}
-""" 
-
-    ldif_filename = f"{user.samaccountname}.ldif"
-    ldif_directory = "ldif_users"
-    if not os.path.exists(ldif_directory):
-        os.makedirs(ldif_directory)
-    ldif_path = os.path.join(ldif_directory, ldif_filename)
-    with open(ldif_path, "w") as ldif_file:
-        ldif_file.write(ldif_content)
-
-
-def getLDAPdns():# Ldap tarafındaki userların dn'lerini ceker
-    ldap_dn_list = []
-    for entry in entry_generator_ldap:
-        ldap_dn_list.append(entry['dn'])
-    return ldap_dn_list
-
-def getLDAPExistingGroups():
-    with Connection(Server(ldap_server), user=ldap_admin_username, password=ldap_admin_password, auto_bind=True) as conn:
-        search_base = 'ou=Users,ou=Groups,dc=alidap,dc=com' 
-        search_filter = '(objectClass=inetOrgPerson)'
-        attributes_to_return = ['uid']  
-        conn.search(search_base, search_filter, attributes=attributes_to_return)
-
-        for entry in conn.entries:
-            group_search_base = 'ou=Groups,dc=alidap,dc=com'
-            group_search_filter = f'(&(objectClass=groupOfNames)(member={entry.entry_dn}))'
-            group_attributes_to_return = ['cn']
-
-            conn.search(group_search_base,group_search_filter, attributes = group_attributes_to_return)
-
-            if conn.entries:
-                print('Groups:')
-                for group_entry in  conn.entries:
-                    print(f"{entry.cn.value}- {group_entry.cn.value}")
-
-
-
-def getLDAPExistingAttributes(original_dn):
-
-    entry_generator_ldap = conn_ldap.extend.standard.paged_search(search_base = ldap_base_dn, search_filter = search_filter_ldap,search_scope=SUBTREE, attributes = ['cn', 'sn', 'telephoneNumber','mail','objectClass','uid',])
-    for entry in entry_generator_ldap:
-        if entry['dn'] == original_dn:
-            return entry['attributes']
-
-
-def updateLDAP(user_attributes, user_ldap, user):
-    user_dn = f"cn={user.name}+sn={user.surname},{ldap_base_dn}"
-
-    server = Server(ldap_server, port=ldap_port)
-    conn = Connection(server, user=ldap_admin_username, password=ldap_admin_password)
- 
-    if conn.bind():
-        modification_dict = {}
-        for key, value in user_attributes.items():
-            if key in user_ldap and key != "objectClass" and key != "uid": 
-                if value:
-                    if value[0] != user_ldap[key]:
-                        if key == "sn":
-                            #deleteLDAP(user.dn ?)
-                            addLDAP(user)
-                        elif value == [' '] and user_ldap[key] == []:
-                            pass
+                            search_filter_groups = f"(&(objectClass=groupOfNames)(member={dn}))"
+                            user_membership = conn.search(ldap_group_dn, search_filter=search_filter_groups)
+                            if user_membership:
+                                for group in ldap_existing_groups:
+                                    group_dn = f"cn={group},{ldap_group_dn}"
+                                    group_existing = conn.compare(group_dn, "member", dn)
+                                    if group_existing:
+                                        if group not in memberOf:
+                                            group_changes = {
+                                                    'member': [(MODIFY_DELETE, [dn])]
+                                                    }
+                                            result = conn.modify(group_dn, changes=group_changes)
+                                    else:
+                                        pass
                         else:
-                            modification_dict[key] = [(MODIFY_REPLACE, user_ldap[key])]
-                            createLDIF(user)
-                elif value == []:
-                    if user_ldap[key] != []:
-                        modification_dict[key] = [(MODIFY_REPLACE, user_ldap[key])]
-        if modification_dict:
-            try:
-                conn.modify(user_dn, modification_dict)
-                print(f"Successfully modified the LDAP entry: {user_dn.split()[0]}")
-            except Exception as e:
-                print(f"Failed to modify the LDAP entry: {e}")
-        else:
-            print("No modifications to perform. for",user_attributes['cn'][0])
+                            object_class = ['inetOrgPerson','organizationalPerson','top','person']
+                            new_attributes = {
+                            'objectClass': object_class,
+                            'ou': 'Groups',
+                            'ou': 'Users',
+                            'cn': cn,
+                            'givenName': givenName,
+                            'sn': sn,
+                            'uid': sAMAccountName,
+                            'mail': mail,
+                            'telephoneNumber': phoneNumber,
+                            }
+                            result = conn.add(dn, attributes=new_attributes)
+                            if result:
+                                #print(f"{cn} added successfully. ")
+                                pass
+                            else:
+                                print(f"Failed to add user: {conn.result}")
+                    dn,cn,sn,email,phoneNumber,sAMAccountName,memberOf = " ", " ", " ", " ", " ", " ", []
 
-        conn.unbind()
-    else:
-        print(f"Failed to bind to the LDAP server: {conn.result}")
+                elif input_dn and total_lines_ad == line_number:
+                    print(f"User is not found !!")
+                elif total_lines_ad == line_number:
+                    print ("Number of users : ",user_counter)
 
+            elif line.startswith('dn') and not spec_search :
+                dn = line.strip()
+                components = dn.split(',')
+                converted_cn = components[0].split('=')[1]
+                converted_dn = f"cn={converted_cn},{ldap_base_dn}"
+                dn = converted_dn
+                user_counter = user_counter + 1
+                if  input_dn == dn:
+                    spec_search = True
+                    dn = input_dn
+            elif line.startswith('cn'):
+                cn = line.strip()
+                cn = content(cn)
+            elif line.startswith('sn'):
+                sn = line.strip()
+                sn = content(sn)
+            elif line.startswith('givenName'):
+                givenName = line.strip()
+                givenName = content(givenName)
+            elif line.startswith('sAMAccountName'):
+                sAMAccountName = line.strip()
+                sAMAccountName = content(sAMAccountName)
+            elif line.startswith('mail'):
+                mail = line.strip()
+                mail = content(mail)
+            elif line.startswith('telephoneNumber'):
+                phoneNumber = line.strip()
+                phoneNumber = content(phoneNumber)
+            elif line.startswith('memberOf'):
+                group = line.strip()
+                components = group.split(",")
+                memberOf.append(components[0].split('=')[1])
 
-def normalize_ldap_dn(ad_dn, ldap_dn): # DN equalizer
-    
-    original_ldap_dn = ldap_dn
-    original_ad_dn = ad_dn
-
-    ou_to_remove = "ou=Groups,"
-    if ou_to_remove in ldap_dn:
-        ldap_dn = ldap_dn.replace(ou_to_remove, "")
-
-    rdn_parts_ad = ad_dn.split(',')
-    rdn_parts_ldap = ldap_dn.split(',')
-
-    normalized_rdns_ad = []
-    normalized_rdns_ldap = []
-
-    for rdn in rdn_parts_ad:
-        rdn = rdn.strip()
-        if rdn.lower().startswith("ou="):
-            rdn = "cn" + rdn[2:]
-        if "+sn=" in rdn.lower():
-            rdn = rdn.split("+sn=")[0]
-        normalized_rdns_ad.append(rdn.lower())
-
-    filtered_rdns_ad = list(filter(lambda rdn: not rdn.startswith("dc="), normalized_rdns_ad))
-    filtered_rdns_ad.sort()
-    filtered_dn_ad = ','.join(filtered_rdns_ad)
-
-    for rdn in rdn_parts_ldap:
-        rdn = rdn.strip()
-        if rdn.lower().startswith("ou="):
-            rdn = "cn" + rdn[2:]
-        if "+sn=" in rdn.lower():
-            rdn = rdn.split("+sn=")[0]
-        normalized_rdns_ldap.append(rdn.lower())
-
-    filtered_rdns_ldap = list(filter(lambda rdn: not rdn.startswith("dc="), normalized_rdns_ldap))
-    filtered_rdns_ldap.sort()
-    filtered_dn_ldap = ','.join(filtered_rdns_ldap)
-
-
-    #print("dn_ad : ",filtered_dn_ad)
-    #print("ldap_dn: ",filtered_dn_ldap)
-
-    if (filtered_dn_ad == filtered_dn_ldap):
-        #print("dn_ad : ",original_ad_dn)
-        #print("ldap_dn: ",original_ldap_dn)
-        return original_ldap_dn
-    else:
-        return False
-
-
-def getGroups(dn_list):
-
-    group_names = []
-
-    for dn in dn_list:
-        components = dn.split(',')
-        for component in components:
-            if component.strip().startswith('CN='):
-                group_name = component.strip().replace('CN=', '', 0)
-                group_name = group_name.replace('CN=', '')
-                group_names.append(group_name)
-                break
-    return group_names
-
-def update_groups(user, group_list):# samaccount name ve uid eşlemesi ile çalışır.
-
-    user_dn = f"cn={user.name}+sn={user.surname},{ldap_base_dn}"
-    server = Server(ldap_server, port=ldap_port)
-    conn = Connection(server, user=ldap_admin_username, password=ldap_admin_password)
-    conn.bind()
-
-    search_base = 'ou=Users,ou=Groups,dc=alidap,dc=com' 
-    search_filter = f'(uid={user.samaccountname})'
-    attributes_to_return = ['uid']  
-    conn.search(search_base, search_filter, attributes=attributes_to_return)
-
-    if conn.entries[0].uid.value == user.samaccountname:
-        group_search_base = 'ou=Groups,dc=alidap,dc=com'
-        group_search_filter = f'(&(objectClass=groupOfNames)(member={conn.entries[0].entry_dn}))'
-        group_attributes_to_return = ['cn']
-        conn.search(group_search_base,group_search_filter, attributes = group_attributes_to_return)
-
-        for entry in conn.entries:
-            if entry.cn.value in group_list:
-                group_list.remove(entry.cn.value)
             else:
-                group_dn_to_remove = f"cn={entry.cn.value},ou=Groups,dc=alidap,dc=com"
-                group_changes = {
-                        'member': [(MODIFY_DELETE, [user_dn])]
-                        }
-                result = conn.modify(group_dn_to_remove, changes=group_changes)
-                if result is True :
-                    print(f"Succesfully removed from group {entry.cn.value}")
-                else:
-                    print(f"Failed to remove {user_dn} from {entry.cn.vaue}")
-
-
-        if group_list:
-            for group_name in group_list:
-                group_dn = f"cn={group_name},ou=Groups,dc=alidap,dc=com"
-                result = conn.modify(group_dn, {'member': [(MODIFY_ADD, [user_dn])]})
-                if result is True :
-                    print("succesfully added")
-                else:
-                    print(f"Failed to add {user_dn} TO {group_name}")
-    
-
-
-
-
-
-                    #for new_group in group_list:
-            #            if group_entry.cn.value == new_group:
-             #               pass
-              #          else:
-               #     print(f"{counter}: {entry.uid.value}- {group_entry.cn.value}")
-
-            #else:
-
-            #for group_entry in conn.entries:
-             #   print(f"{counter}: {entry.uid.value}- {group_entry.cn.value}")
-    
-
+                pass
+            progress = (line_number + 1) / total_lines_ad * 100
+            print(f"Progress: {progress:.0f}%", end='', flush=True)
+            backspaces = len(f"Progress ({progress:.0f}%)")
+            print('\b' * backspaces, end='', flush=True)
+        print()
     conn.unbind()
 
 
-object_class = []
-uuid_list = []
-ldap_dn_list = []
-ldap_dn_list = getLDAPdns()
+def getLdapGroups():
+    server = Server(ldap_server, port=ldap_port)
+    conn = Connection(server, user=ldap_admin_username, password=ldap_admin_password, auto_bind=True)
 
-for entry in entry_generator_ad:
-        
-    object_class += entry['attributes']['objectClass']
-    user_cn = entry['attributes']['cn']
-    user_sn = entry['attributes']['sn']
-    phone_number = entry['attributes']['telephoneNumber']
-    mail = entry['attributes']['mail']
-    samaccountname = entry['attributes']['sAMAccountName']
-    user = User(name=user_cn, surname=user_sn, samaccountname = samaccountname, phone_number=phone_number, mail=mail, object_class=object_class)
-    object_class.remove('user')#ldap doesn't has a user object class
-    object_class.append('inetOrgPerson')# it is mandatory to use adding uid attribute
-    new_attributes = entry['attributes']
-    flag = False
-    if ldap_dn_list:
-        for ldap_dn in ldap_dn_list:
-            existing_dn= normalize_ldap_dn(entry['dn'],ldap_dn)
-            if existing_dn  == ldap_dn:
-                old_attributes = getLDAPExistingAttributes(ldap_dn)
+    search_filter = "(objectClass=groupOfNames)"
+    result = conn.search(ldap_group_dn,search_filter,attributes=["cn"])
+    for entry in conn.entries:
+        ldap_existing_groups.append(entry.cn)
 
-                updateLDAP(old_attributes, new_attributes,user)
-                flag = True
-    if not flag:
-        addLDAP(user)
-    
-   # n = getLDAPExistingGroups()
-    group_list = getGroups(entry['attributes']['memberOf'])
-    update_groups(user, group_list)
+    conn.unbind()
+
+def content(content):
+    converted = content.split(": ")
+    content = converted[1]
+    return content
 
 
-    object_class = []
-conn_ad.unbind()
-conn_ldap.unbind() 
+start_time = time.time()
+command_ad = f'ldapsearch -x -D {ad_username} -w {ad_password} -H ldap://{ad_server}:{ad_port} -b {base_dn} -s sub -E pr=1000/noprompt "(&(objectClass=Person)(!(sAMAccountName=krbtgt))(!(sAMAccountName=Administrator))(!(sAMAccountName=Guest)) )" cn sn telephoneNumber mail givenName sAMAccountName memberOf > ad_users.ldif'
+print("Fetching - Active Directory Users...")
+result_ad = subprocess.run(command_ad, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+
+# Check the result
+if result_ad.returncode == 0:
+    print("Successfully fetched.")
+    total_lines_ad = int(subprocess.check_output(["wc", "-l", "ad_users.ldif"]).split()[0])
+else:
+    print("Failed with the following error:")
+    print(result.stderr)
+
+
+file_path = 'ad_users.ldif'
+print("Synchronization is in progress...")
+getLdapGroups()
+if argc == 1:
+    search_lines(file_path, total_lines_ad, input_dn)
+else:
+    input_dn = sys.argv[1]
+    print("mode : the single user search")
+    search_lines(file_path, total_lines_ad, input_dn)
+
+elapsed_time = time.time() - start_time 
+
+print( """
+___________________________________
+                
+    Elapsed time is  {:.2f} minutes 
+___________________________________  
+                            """.format(elapsed_time/60))
