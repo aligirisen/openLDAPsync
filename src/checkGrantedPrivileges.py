@@ -9,7 +9,9 @@ ldap_admin_username = ''
 ldap_admin_password = ''
 ldap_base_dn = ''
 
+
 server_ldap = Server(ldap_server, port=ldap_port)
+
 conn_ldap = Connection(server_ldap, user=ldap_admin_username, password=ldap_admin_password, auto_bind=True)
 
 
