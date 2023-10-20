@@ -38,5 +38,3 @@ python3 syncAD.py
 ```
 
 
-
-openLDAP should support UTF-8 for email addresses.

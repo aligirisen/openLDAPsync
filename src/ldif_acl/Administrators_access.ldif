@@ -1,0 +1,6 @@
+
+dn: olcDatabase={1}mdb,cn=config
+changetype: modify
+add: olcAccess
+olcAccess: {0}to * 
+  by group/groupOfNames/member="ou=Administras,ou=Groups,dc=example,dc=com" write by * read

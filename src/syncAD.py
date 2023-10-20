@@ -34,11 +34,11 @@ def search_lines(filename_ad, total_lines_ad, input_dn):
     global spec_search
     server = Server(ldap_server, port=ldap_port)
     conn = Connection(server, user=ldap_admin_username, password=ldap_admin_password, auto_bind=True)
-    dn,cn,sn,email,phoneNumber,sAMAccountName,memberOf = " ", " ", " ", " ", " ", " ", []
+    dn,cn,sn,givenName,email,phoneNumber,sAMAccountName,memberOf = " " , " ", " ", " ", " ", " ", " ", []
     with open(filename_ad, 'r') as file:
         for line_number, line in enumerate(file, start=1):
             if line.startswith('#') or line.startswith(' '):
-                if dn != " " and sAMAccountName != " " and cn != " ":
+                if dn != " " and sAMAccountName != " " and cn != " " and givenName != " ":
                     if input_dn and spec_search:
                         search_result = conn.search(dn, '(objectClass=person)')
                         if search_result:
@@ -147,7 +147,7 @@ def search_lines(filename_ad, total_lines_ad, input_dn):
                                 pass
                             else:
                                 print(f"Failed to add user: {conn.result}")
-                    dn,cn,sn,email,phoneNumber,sAMAccountName,memberOf = " ", " ", " ", " ", " ", " ", []
+                    dn,cn,sn,givenName,email,phoneNumber,sAMAccountName,memberOf = " ", " ", " ", " ", " ", " ", " ", []
 
                 elif input_dn and total_lines_ad == line_number:
                     print(f"User is not found !!")
@@ -232,6 +232,7 @@ file_path = 'ad_users.ldif'
 print("Synchronization is in progress...")
 getLdapGroups()
 if argc == 1:
+    pass
     search_lines(file_path, total_lines_ad, input_dn)
 else:
     input_dn = sys.argv[1]
@@ -239,10 +240,9 @@ else:
     search_lines(file_path, total_lines_ad, input_dn)
 
 elapsed_time = time.time() - start_time 
-
 print( """
 ___________________________________
                 
-    Elapsed time is  {:.2f} minutes 
+    Elapsed time is {:.2f} minutes 
 ___________________________________  
                             """.format(elapsed_time/60))
