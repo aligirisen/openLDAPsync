@@ -1,6 +1,7 @@
 # openLDAPsync
 synchronize bidirectional Active Directory - openLDAP
 
+
 firstly check the connection and please be ensured about your active directory user specifications with considering following features.
 
 
