@@ -3,11 +3,12 @@ import os, re
 from io import StringIO
 
 
-ldap_server = ''
-ldap_port = 389
-ldap_admin_username = ''
-ldap_admin_password = ''
-ldap_base_dn = ''
+ldap_server = config.get('LDAP','ldap_server')
+ldap_port = int(config.get('LDAP','ldap_port'))
+ldap_admin_username = config.get('LDAP','ldap_admin_username')
+ldap_admin_password = config.get('LDAP','ldap_admin_password')
+ldap_group_dn = config.get('LDAP','ldap_group_dn')
+ldap_users_dn = config.get('LDAP','ldap_users_dn')
 
 
 server_ldap = Server(ldap_server, port=ldap_port)
