@@ -6,8 +6,9 @@ config.read('config.ini')
 
 argc = len(sys.argv)
 
-
-sync_group_mode = config.get('PREF','sync_group')
+config_pref = configparser.ConfigParser()
+config_pref.read('pref_config.ini')
+sync_group_mode = config_pref.get('PREF','sync_group')
 
 #ACTIVE DIRECTORY CONNECTION BLOCK
 ad_server = config.get('AD','ad_server')
@@ -15,7 +16,6 @@ ad_port = int(config.get('AD','ad_port'))
 ad_username = config.get('AD','ad_username')
 ad_password = config.get('AD', 'ad_password')
 ad_base_dn = config.get('AD','ad_base_dn')
-auto_bind = bool(config.get('PREF', 'auto_bind'))
 
 #OPENLDAP CONNECTION BLOCK
 ldap_server = config.get('LDAP','ldap_server')
@@ -25,10 +25,6 @@ ldap_admin_password = config.get('LDAP','ldap_admin_password')
 ldap_base_dn = config.get('LDAP','ldap_base_dn')
 ldap_group_dn = config.get('LDAP','ldap_group_dn')
 ldap_user_group_dn = config.get('LDAP','ldap_user_group_dn')
-ldap_users_dn = config.get('LDAP','ldap_users_dn')
-ldap_agent_group_dn = config.get('LDAP','ldap_agent_group_dn')
-ldap_policy_group_dn = config.get('LDAP','ldap_policy_group_dn')
-ldap_role_group_dn = config.get('LDAP','ldap_role_group_dn')
 
 ldap_existing_groups = []
 spec_search = False
@@ -52,8 +48,7 @@ def search_lines(filename_ad, total_lines_ad, input_dn):
                 if dn != " " and sAMAccountName != " " and cn != " " :
                     if input_dn and spec_search:
                         search_result = conn.search(dn, '(objectClass=person)')
-                        if search_result:
-                            
+                        if search_result:                           
                             modification_dict = {}
                             attributes_to_compare = {
                             'givenName': givenName,
@@ -94,12 +89,11 @@ def search_lines(filename_ad, total_lines_ad, input_dn):
                                                     'member': [(MODIFY_DELETE, [dn])]
                                                     }
                                             result = conn.modify(group_dn, changes=group_changes)
-                                        else:
-                                            pass
-                        break
+                        else:
+                            print("user is not existing on ldap")
+                            break
                     elif not input_dn:
                         search_result = conn.search(dn, '(objectClass=person)')
-
                         if search_result:
                             user_counter = user_counter + 1
                             modification_dict = {}
@@ -141,9 +135,9 @@ def search_lines(filename_ad, total_lines_ad, input_dn):
                                     else:
                                         pass
                         else:
-                            filter_str = f'(uid={sAMAccountName})'
-                            exist_uid = conn.search(search_base=ldap_users_dn, search_filter=filter_str, search_scope=SUBTREE, attributes=['cn'])
-                            if conn.search(f'{group_name},{ldap_base_dn}', '(objectClass=*)'):
+                            if conn.search(f'{group_name},{ldap_group_dn}', '(objectClass=*)'):
+                                filter_str = f'(uid={sAMAccountName})'
+                                exist_uid = conn.search(search_base=ldap_base_dn, search_filter=filter_str, search_scope=SUBTREE, attributes=['cn'])
                                 if exist_uid:
                                     entry = conn.entries[0]
                                     conn.delete(entry.entry_dn)
@@ -161,17 +155,18 @@ def search_lines(filename_ad, total_lines_ad, input_dn):
                                 result = conn.add(dn, attributes=new_attributes)
                                 if not result:
                                     print(f"Failed to add user: {conn.result}")
-                            else:
-                                if sync_group_mode:
-                                    groups_dn = ldap_base_dn 
-                                    for directory in reversed(org_unit_list):
-                                        group_str = f"{directory},{groups_dn}"
-                                        groups_dn = group_str
-                                        groups_attributes = {
-                                                'objectClass': ['top', 'organizationalUnit'],
-                                                }
-                                        result = conn.add(group_str, attributes=groups_attributes)
-                                
+                                else:
+                                    new_user_counter = new_user_counter + 1
+                            elif sync_group_mode:
+                                groups_dn = ldap_group_dn 
+                                for directory in reversed(org_unit_list):
+                                    group_str = f"{directory},{groups_dn}"
+                                    groups_dn = group_str
+                                    groups_attributes = {
+                                            'objectClass': ['top', 'organizationalUnit'],
+                                            'description': directory,
+                                            }
+                                    result = conn.add(group_str, attributes=groups_attributes)
                                 new_user_counter = new_user_counter + 1
                                 object_class = ['inetOrgPerson','organizationalPerson','top','person']
                                 new_attributes = {
@@ -184,7 +179,6 @@ def search_lines(filename_ad, total_lines_ad, input_dn):
                                 'homePostalAddress': homePostalAddress,
                                 'telephoneNumber': phoneNumber,
                                 }
-
                                 result = conn.add(dn, attributes=new_attributes)
                                 for group in memberOf:
                                     group_dn = f"cn={group},{ldap_user_group_dn}"
@@ -197,7 +191,7 @@ def search_lines(filename_ad, total_lines_ad, input_dn):
                     print ("Number of users : ",user_counter)
                     print ("Number of new users : ",new_user_counter)
 
-            elif line.startswith('dn') and not spec_search : # change for your own DIT tree
+            elif line.startswith('dn') and not spec_search :
                 dn = line.strip()
                 str_dn = dn.split(':',1)[1].strip()
                 components = str_dn.split(',')
