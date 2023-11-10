@@ -8,7 +8,14 @@ argc = len(sys.argv)
 
 config_pref = configparser.ConfigParser()
 config_pref.read('pref_config.ini')
+
+#PREF
 sync_group_mode = config_pref.get('PREF','sync_group')
+ad_user_search_dn = config_pref.get('PREF','ad_user_search_dn')
+ad_computer_search_dn = config_pref.get('PREF','ad_computer_search_dn')
+ldap_directory_domain_dn = config_pref.get('PREF','ldap_default_directory_dn')
+ldap_user_group_dn = config_pref.get('PREF','ldap_user_group_dn')
+ldap_spec_directory = config_pref.get('PREF','ldap_spec_directory_dn')
 
 #ACTIVE DIRECTORY CONNECTION BLOCK
 ad_server = config.get('AD','ad_server')
@@ -23,25 +30,21 @@ ldap_port = int(config.get('LDAP','ldap_port'))
 ldap_admin_username = config.get('LDAP','ldap_admin_username')
 ldap_admin_password = config.get('LDAP','ldap_admin_password')
 ldap_base_dn = config.get('LDAP','ldap_base_dn')
-ldap_group_dn = config.get('LDAP','ldap_group_dn')
-ldap_user_group_dn = config.get('LDAP','ldap_user_group_dn')
+
 
 ldap_existing_groups = []
+known_directories = []
 spec_search = False
 input_dn = ""
-group_name = ""
-
+ou_name = ""
 
 def search_lines(filename_ad, total_lines_ad, input_dn):
     user_counter,new_user_counter = 0,0
-    group_match = True
-
     global spec_search
-    global group_name
-
+    global ou_name
     server = Server(ldap_server, port=ldap_port)
     conn = Connection(server, user=ldap_admin_username, password=ldap_admin_password, auto_bind=True)
-    dn,cn,sn,givenName,email,phoneNumber,homePostalAddress,sAMAccountName,memberOf = " " , " ", " ", " ", " ", " ", " ", " ", []
+    dn,cn,sn,givenName,mail,phoneNumber,homePostalAddress,sAMAccountName,memberOf = " " , " ", " ", " ", " ", " ", " ", " ", []
     with open(filename_ad, 'r') as file:
         for line_number, line in enumerate(file, start=1):
             if line.startswith('#') or line.startswith(' '):
@@ -70,8 +73,7 @@ def search_lines(filename_ad, total_lines_ad, input_dn):
                                 except Exception as e:
                                     print(f"Failed to modify the LDAP entry: {e}")
                             else:
-                                print("No attribute modifications to perform for ",cn)
-                            
+                                print("No attribute modifications to perform for ",cn)                            
                             for group in memberOf:
                                 group_dn = f"cn={group},{ldap_user_group_dn}"
                                 result = conn.modify(group_dn, {'member': [(MODIFY_ADD, [dn])]})
@@ -135,7 +137,13 @@ def search_lines(filename_ad, total_lines_ad, input_dn):
                                     else:
                                         pass
                         else:
-                            if conn.search(f'{group_name},{ldap_group_dn}', '(objectClass=*)'):
+                            dir_dn = f'{ou_name},{ldap_directory}' 
+                            if dir_dn not in known_directories:
+                                exist_directory = conn.search(dir_dn,'(objectClass=*)')
+                                known_directories.append(f'{ou_name},{ldap_directory}')
+                            else:
+                                exist_directory is True
+                            if exist_directory:
                                 filter_str = f'(uid={sAMAccountName})'
                                 exist_uid = conn.search(search_base=ldap_base_dn, search_filter=filter_str, search_scope=SUBTREE, attributes=['cn'])
                                 if exist_uid:
@@ -156,9 +164,11 @@ def search_lines(filename_ad, total_lines_ad, input_dn):
                                 if not result:
                                     print(f"Failed to add user: {conn.result}")
                                 else:
-                                    new_user_counter = new_user_counter + 1
-                            elif sync_group_mode:
-                                groups_dn = ldap_group_dn 
+                                    new_user_counter = new_user_counter + 1 
+                                
+                            elif sync_group_mode and not exist_directory:
+                                print("sync_group_mode",dn)
+                                groups_dn = ldap_base_dn
                                 for directory in reversed(org_unit_list):
                                     group_str = f"{directory},{groups_dn}"
                                     groups_dn = group_str
@@ -167,6 +177,9 @@ def search_lines(filename_ad, total_lines_ad, input_dn):
                                             'description': directory,
                                             }
                                     result = conn.add(group_str, attributes=groups_attributes)
+                                    if not result:
+                                        print("Directory could not create",group_str)
+
                                 new_user_counter = new_user_counter + 1
                                 object_class = ['inetOrgPerson','organizationalPerson','top','person']
                                 new_attributes = {
@@ -183,7 +196,7 @@ def search_lines(filename_ad, total_lines_ad, input_dn):
                                 for group in memberOf:
                                     group_dn = f"cn={group},{ldap_user_group_dn}"
                                     conn.modify(group_dn, {'member': [(MODIFY_ADD, [dn])]})
-                    dn,cn,sn,givenName,email,homePostalAddress,phoneNumber,sAMAccountName,memberOf = " ", " ", " ", " ", " ", " ", " ", " ", []
+                    dn,cn,sn,givenName,mail,homePostalAddress,phoneNumber,sAMAccountName,memberOf = " ", " ", " ", " ", " ", " ", " ", " ", []
 
                 elif input_dn and total_lines_ad == line_number:
                     print(f"User is not found !!")
@@ -204,19 +217,24 @@ def search_lines(filename_ad, total_lines_ad, input_dn):
                         cn_counter = cn_counter + 1
                         if cn_counter >= 2 :
                             formatted_components.append('ou=' + component[3:])
-                            group_name = ('ou=' + component[3:] + ',ou=Groups')
+                            ou_name = ('ou=' + component[3:])
                             if component[3:] not in org_unit_list:
                                 org_unit_list.append('ou=' + component[3:])
-                        else:
-                            formatted_components.append('cn=' + component[3:])
                     elif component.startswith('OU='):
                         formatted_components.append('ou=' + component[3:])
 
-                group_name = ','.join(org_unit_list)
+                ou_name = ','.join(org_unit_list)
                 new_dn = ','.join(formatted_components)
-                dn = (new_dn+","+ldap_base_dn)
-                 
-                if  input_dn == dn:
+                
+                if ldap_spec_directory == "default" or ldap_spec_directory == "":#for creating new directory if it is not existing.
+                    ldap_directory = ldap_directory_domain_dn
+                else:
+                    ldap_spec_directories = ldap_spec_directory.split(",")
+                    for directory in ldap_spec_directories:
+                        org_unit_list.append(directory)
+                   
+                    ldap_directory = f"{ldap_spec_directory},{ldap_directory_domain_dn}"
+                if input_dn == dn:
                     spec_search = True
                     dn = input_dn
             elif line.startswith('cn'):
@@ -231,6 +249,7 @@ def search_lines(filename_ad, total_lines_ad, input_dn):
             elif line.startswith('sAMAccountName'):
                 sAMAccountName = line.strip()
                 sAMAccountName = content(sAMAccountName)
+                dn = f"uid={sAMAccountName},{ou_name},{ldap_directory}"
             elif line.startswith('mail'):
                 mail = line.strip()
                 mail = content(mail)
@@ -280,16 +299,22 @@ def content(content):
 
 
 start_time = time.time()
-command_ad = f'ldapsearch -x -D {ad_username} -w {ad_password} -H ldap://{ad_server}:{ad_port} -b {ad_base_dn} "(&(objectClass=person)(objectCategory=person)(!(sAMAccountName=krbtgt))(!(sAMAccountName=Administrator))(!(sAMAccountName=Guest)) )" -s sub -E pr=1000/noprompt  cn sn telephoneNumber mail homePostalAddress givenName sAMAccountName memberOf > ad_users.ldif'
+command_ad = f'ldapsearch -x -D {ad_username} -w {ad_password} -H ldap://{ad_server}:{ad_port} -b {ad_user_search_dn} "(&(objectClass=person)(objectCategory=person)(!(sAMAccountName=krbtgt))(!(sAMAccountName=Administrator))(!(sAMAccountName=Guest)) )" -s sub -E pr=1000/noprompt  cn sn telephoneNumber mail homePostalAddress givenName sAMAccountName memberOf > ad_users.ldif'
 print("Fetching - Active Directory Users...")
 result_ad = subprocess.run(command_ad, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
 
+#command_ad_computer = f'ldapsearch -x -b {ad_computer_search_dn} -H ldap://{ad_server}:{ad_port} -D {ad_username} -w {ad_password} "(objectClass=computer)" >> ad_users.ldif'
+
+#print("Fetching - Active Directory Computers...")
+#result_ad_computer = subprocess.run(command_ad_computer, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+
 # Check the result
-if result_ad.returncode == 0:
+if result_ad.returncode == 0:# and result_ad_computer.returncode == 0:
     print("Successfully fetched.")
     total_lines_ad = int(subprocess.check_output(["wc", "-l", "ad_users.ldif"]).split()[0])
 else:
-    print("Failed with the following error:")
+    total_lines_ad = int(subprocess.check_output(["wc", "-l", "ad_users.ldif"]).split()[0])
+    print("Fetching failed program will execute with existing ldif file. Error:")
     print(result_ad.stderr)
 
 
