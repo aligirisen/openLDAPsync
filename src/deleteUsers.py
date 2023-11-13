@@ -4,28 +4,12 @@ from ldap3 import *
 config = configparser.ConfigParser()
 config.read('config.ini')
 
-argc = len(sys.argv)
-
-config_pref = configparser.ConfigParser()
-config_pref.read('pref_config.ini')
-sync_group_mode = config_pref.get('PREF','sync_group')
-
-#ACTIVE DIRECTORY CONNECTION BLOCK
-ad_server = config.get('AD','ad_server')
-ad_port = int(config.get('AD','ad_port'))
-ad_username = config.get('AD','ad_username')
-ad_password = config.get('AD', 'ad_password')
-ad_base_dn = config.get('AD','ad_base_dn')
-
 #OPENLDAP CONNECTION BLOCK
 ldap_server = config.get('LDAP','ldap_server')
 ldap_port = int(config.get('LDAP','ldap_port'))
 ldap_admin_username = config.get('LDAP','ldap_admin_username')
 ldap_admin_password = config.get('LDAP','ldap_admin_password')
 ldap_base_dn = config.get('LDAP','ldap_base_dn')
-ldap_group_dn = config_pref.get('PREF','ldap_default_directory_dn')
-ldap_user_group_dn = config_pref.get('PREF','ldap_user_group_dn')
-
 
 counter = 0
 def delet():
@@ -44,12 +28,10 @@ def delet():
             print(user_dn)
     delet()
 
-
-
 server = Server(ldap_server, ldap_port)
 conn = Connection(server, user=ldap_admin_username, password=ldap_admin_password, auto_bind=True)
 
 
 delet()
-print(counter)
+print(f"{counter} users are deleted.")
 conn.unbind()
