@@ -16,6 +16,9 @@ ad_computer_search_dn = config_pref.get('PREF','ad_computer_search_dn')
 ldap_directory_domain_dn = config_pref.get('PREF','ldap_default_directory_dn')
 ldap_user_group_dn = config_pref.get('PREF','ldap_user_group_dn')
 ldap_spec_directory = config_pref.get('PREF','ldap_spec_directory_dn')
+create_group = config_pref.get('PREF', 'create_group')
+
+sync_computers = config_pref.get('PREF', 'sync_computers')
 
 #ACTIVE DIRECTORY CONNECTION BLOCK
 ad_server = config.get('AD','ad_server')
@@ -38,9 +41,8 @@ spec_search = False
 input_dn = ""
 ou_name = ""
 def add_entry (conn,dn,cn,sn,givenName,mail,phoneNumber,homePostalAddress,sAMAccountName,objectType,memberOf):
-    if objectType == "Computer":
+    if objectType == "Computer" and sync_computers is True:
         object_class = ['top','person','inetOrgPerson','organizationalPerson']
-        #object_class = ['inetOrgPerson','organizationalPerson','top','person']
         new_attributes = {
             'objectClass': object_class,
             'cn': cn,
@@ -48,7 +50,6 @@ def add_entry (conn,dn,cn,sn,givenName,mail,phoneNumber,homePostalAddress,sAMAcc
             'sn': sn,
             }
         result = conn.add(dn, attributes=new_attributes)
-        print(result,new_attributes)
         return
     object_class = ['inetOrgPerson','organizationalPerson','top','person']
     new_attributes = {
@@ -86,8 +87,20 @@ def modify_entry (conn,dn,cn,sn,givenName,mail,phoneNumber,homePostalAddress,sAM
     for group in memberOf:
         group_dn = f"cn={group},{ldap_user_group_dn}"
         result = conn.modify(group_dn, {'member': [(MODIFY_ADD, [dn])]})
+        if not result and create_group == "True":
+            object_class = ['top','groupOfNames']
+            members = [dn]
+            grp_attributes = {
+                    'objectClass': object_class,
+                    'cn': group,
+                    'description' : group,
+                    'member': members,
+                    }
+            res = conn.add(group_dn, attributes=grp_attributes)
+
+
     search_filter_groups = f"(&(objectClass=groupOfNames)(member={dn}))"
-    user_membership = conn.search(ldap_user_group_dn, search_filter=search_filter_groups)
+    user_membership = conn.search(ldap_user_group_dn, search_filter=search_filter_groups,attributes=['cn'])
     if user_membership:
         for group in ldap_existing_groups:
             group_dn = f"cn={group},{ldap_user_group_dn}"
@@ -132,7 +145,7 @@ def search_lines(filename_ad, total_lines_ad, input_dn):
                                 exist_directory = conn.search(dir_dn,'(objectClass=*)')
                                 known_directories.append(f'{ou_name},{ldap_directory}')
                             else:
-                                exist_directory is True
+                                exist_directory = True
                             if exist_directory:
                                 filter_str = f'(uid={sAMAccountName})'
                                 exist_uid = conn.search(search_base=ldap_base_dn, search_filter=filter_str, search_scope=SUBTREE, attributes=['cn'])
@@ -154,6 +167,8 @@ def search_lines(filename_ad, total_lines_ad, input_dn):
                                     result = conn.add(group_str, attributes=groups_attributes)
                                     if not result:
                                         print("Directory could not create",group_str)
+                                        known_directories.remove(f'{ou_name},{ldap_directory}')
+
                                 add_entry(conn,dn,cn,sn,givenName,mail,phoneNumber,homePostalAddress,sAMAccountName,objectType,memberOf)
                                 new_user_counter = new_user_counter + 1
                                 for group in memberOf:
@@ -239,8 +254,8 @@ def search_lines(filename_ad, total_lines_ad, input_dn):
                     group = "adminGroups"
                 elif group == "Domain Admins":
                     group = "domainAdminGroup"
-                else:
-                    group = ""
+                elif not create_group:
+                    group= ""
                 
                 if group:
                     memberOf.append(group)
@@ -258,7 +273,7 @@ def getLdapGroups():
     conn = Connection(server, user=ldap_admin_username, password=ldap_admin_password, auto_bind=True)
 
     search_filter = "(objectClass=groupOfNames)"
-    result = conn.search(ldap_user_group_dn,search_filter)
+    result = conn.search(ldap_user_group_dn,search_filter,attributes=['cn'])
     for entry in conn.entries:
         ldap_existing_groups.append(entry.cn)
 
@@ -273,18 +288,18 @@ def content(content):
 start_time = time.time()
 
 
-command_ad_computer = f'ldapsearch -x -b {ad_computer_search_dn} -H ldap://{ad_server}:{ad_port} -D {ad_username} -w {ad_password} "(objectClass=computer)" > ad_users.ldif'
-print("Fetching - Active Directory Computers...")
-result_ad_computer = subprocess.run(command_ad_computer, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-
-
-command_ad = f'ldapsearch -x -D {ad_username} -w {ad_password} -H ldap://{ad_server}:{ad_port} -b {ad_user_search_dn} "(&(objectClass=person)(objectCategory=person)(!(sAMAccountName=krbtgt))(!(sAMAccountName=Administrator))(!(sAMAccountName=Guest)) )" -s sub -E pr=1000/noprompt  cn sn telephoneNumber mail homePostalAddress givenName sAMAccountName memberOf >> ad_users.ldif'
+command_ad = f'ldapsearch -x -D {ad_username} -w {ad_password} -H ldap://{ad_server}:{ad_port} -b {ad_user_search_dn} "(&(objectClass=person)(objectCategory=person)(!(sAMAccountName=krbtgt))(!(sAMAccountName=Administrator))(!(sAMAccountName=Guest)) )" -s sub -E pr=1000/noprompt  cn sn telephoneNumber mail homePostalAddress givenName sAMAccountName memberOf > ad_users.ldif'
 print("Fetching - Active Directory Users...")
 result_ad = subprocess.run(command_ad, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+print(type(sync_computers))
+if sync_computers == "True":
+    command_ad_computer = f'ldapsearch -x -b {ad_computer_search_dn} -H ldap://{ad_server}:{ad_port} -D {ad_username} -w {ad_password} "(objectClass=computer)" >> ad_users.ldif'
+    print("Fetching - Active Directory Computers...")
+    result_ad_computer = subprocess.run(command_ad_computer, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
 
 
 # Check the result
-if result_ad.returncode == 0 and result_ad_computer.returncode == 0:
+if result_ad.returncode == 0:
     print("Successfully fetched.")
     total_lines_ad = int(subprocess.check_output(["wc", "-l", "ad_users.ldif"]).split()[0])
 else:
