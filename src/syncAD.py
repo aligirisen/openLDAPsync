@@ -10,14 +10,13 @@ config_pref = configparser.ConfigParser()
 config_pref.read('pref_config.ini')
 
 #PREF
-sync_group_mode = config_pref.get('PREF','sync_group')
+sync_directory_mode = config_pref.get('PREF','sync_directory')
 ad_user_search_dn = config_pref.get('PREF','ad_user_search_dn')
 ad_computer_search_dn = config_pref.get('PREF','ad_computer_search_dn')
 ldap_directory_domain_dn = config_pref.get('PREF','ldap_default_directory_dn')
 ldap_user_group_dn = config_pref.get('PREF','ldap_user_group_dn')
 ldap_spec_directory = config_pref.get('PREF','ldap_spec_directory_dn')
 create_group = config_pref.get('PREF', 'create_group')
-
 sync_computers = config_pref.get('PREF', 'sync_computers')
 
 #ACTIVE DIRECTORY CONNECTION BLOCK
@@ -155,7 +154,7 @@ def search_lines(filename_ad, total_lines_ad, input_dn):
                                 add_entry(conn,dn,cn,sn,givenName,mail,phoneNumber,homePostalAddress,sAMAccountName,objectType,memberOf)
                                 new_user_counter = new_user_counter + 1
                                 
-                            elif sync_group_mode and not exist_directory:
+                            elif sync_directory_mode and not exist_directory:
                                 groups_dn = ldap_base_dn
                                 for directory in reversed(org_unit_list):
                                     group_str = f"{directory},{groups_dn}"
